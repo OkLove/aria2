@@ -77,6 +77,7 @@ class RpcMethodTest:public CppUnit::TestFixture {
   CPPUNIT_TEST(testPause);
   CPPUNIT_TEST(testSystemMulticall);
   CPPUNIT_TEST(testSystemMulticall_fail);
+  CPPUNIT_TEST(testAuthorization);
   CPPUNIT_TEST_SUITE_END();
 private:
   std::shared_ptr<DownloadEngine> e_;
@@ -140,6 +141,7 @@ public:
   void testPause();
   void testSystemMulticall();
   void testSystemMulticall_fail();
+  void testAuthorization();
 };
 
 
@@ -167,7 +169,7 @@ void RpcMethodTest::testAddUri()
     auto urisParam = List::g();
     urisParam->append("http://localhost/");
     req.params->append(std::move(urisParam));
-    auto res = m.execute(std::move(req), e_.get());
+    auto res = m.execute("", std::move(req), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
     const RequestGroupList& rgs =
       e_->getRequestGroupMan()->getReservedGroups();
@@ -185,7 +187,7 @@ void RpcMethodTest::testAddUri()
     auto opt = Dict::g();
     opt->put(PREF_DIR->k, "/sink");
     req.params->append(std::move(opt));
-    auto res = m.execute(std::move(req), e_.get());
+    auto res = m.execute("", std::move(req), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
     a2_gid_t gid;
     CPPUNIT_ASSERT_EQUAL(0, GroupId::toNumericId
@@ -200,7 +202,7 @@ void RpcMethodTest::testAddUri()
 void RpcMethodTest::testAddUri_withoutUri()
 {
   AddUriRpcMethod m;
-  auto res = m.execute(createReq(AddUriRpcMethod::getMethodName()), e_.get());
+  auto res = m.execute("", createReq(AddUriRpcMethod::getMethodName()), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -211,7 +213,7 @@ void RpcMethodTest::testAddUri_notUri()
   auto urisParam = List::g();
   urisParam->append("not uri");
   req.params->append(std::move(urisParam));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -225,7 +227,7 @@ void RpcMethodTest::testAddUri_withBadOption()
   auto opt = Dict::g();
   opt->put(PREF_FILE_ALLOCATION->k, "badvalue");
   req.params->append(std::move(opt));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -236,7 +238,7 @@ void RpcMethodTest::testAddUri_withPosition()
   auto urisParam1 = List::g();
   urisParam1->append("http://uri1");
   req1.params->append(std::move(urisParam1));
-  auto res1 = m.execute(std::move(req1), e_.get());
+  auto res1 = m.execute("", std::move(req1), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res1.code);
 
   auto req2 = createReq(AddUriRpcMethod::getMethodName());
@@ -245,7 +247,7 @@ void RpcMethodTest::testAddUri_withPosition()
   req2.params->append(std::move(urisParam2));
   req2.params->append(Dict::g());
   req2.params->append(Integer::g(0));
-  m.execute(std::move(req2), e_.get());
+  m.execute("", std::move(req2), e_.get());
 
   std::string uri =
     getReservedGroup(e_->getRequestGroupMan().get(), 0)->
@@ -263,7 +265,7 @@ void RpcMethodTest::testAddUri_withBadPosition()
   req.params->append(std::move(urisParam));
   req.params->append(Dict::g());
   req.params->append(Integer::g(-1));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -287,7 +289,7 @@ void RpcMethodTest::testAddTorrent()
   AddTorrentRpcMethod m;
   {
     // Saving upload metadata is disabled by option.
-    auto res = m.execute(createAddTorrentReq(), e_.get());
+    auto res = m.execute("", createAddTorrentReq(), e_.get());
     CPPUNIT_ASSERT
       (!File(e_->getOption()->get(PREF_DIR)+
              "/0a3893293e27ac0490424c06de4d09242215f0a6.torrent").exists());
@@ -297,7 +299,7 @@ void RpcMethodTest::testAddTorrent()
   }
   e_->getOption()->put(PREF_RPC_SAVE_UPLOAD_METADATA, A2_V_TRUE);
   {
-    auto res = m.execute(createAddTorrentReq(), e_.get());
+    auto res = m.execute("", createAddTorrentReq(), e_.get());
     CPPUNIT_ASSERT
       (File(e_->getOption()->get(PREF_DIR)+
             "/0a3893293e27ac0490424c06de4d09242215f0a6.torrent").exists());
@@ -327,7 +329,7 @@ void RpcMethodTest::testAddTorrent()
     File(dir+"/0a3893293e27ac0490424c06de4d09242215f0a6.torrent").remove();
     req.params->append(std::move(opt));
 
-    auto res = m.execute(std::move(req), e_.get());
+    auto res = m.execute("", std::move(req), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
     a2_gid_t gid;
     CPPUNIT_ASSERT_EQUAL(0, GroupId::toNumericId
@@ -344,7 +346,7 @@ void RpcMethodTest::testAddTorrent()
 void RpcMethodTest::testAddTorrent_withoutTorrent()
 {
   AddTorrentRpcMethod m;
-  auto res = m.execute(createReq(AddTorrentRpcMethod::getMethodName()),
+  auto res = m.execute("", createReq(AddTorrentRpcMethod::getMethodName()),
                        e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
@@ -354,7 +356,7 @@ void RpcMethodTest::testAddTorrent_notBase64Torrent()
   AddTorrentRpcMethod m;
   auto req = createReq(AddTorrentRpcMethod::getMethodName());
   req.params->append("not torrent");
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -365,7 +367,7 @@ void RpcMethodTest::testAddTorrent_withPosition()
   req1.params->append(readFile(A2_TEST_DIR"/test.torrent"));
   req1.params->append(List::g());
   req1.params->append(Dict::g());
-  auto res1 = m.execute(std::move(req1), e_.get());
+  auto res1 = m.execute("", std::move(req1), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res1.code);
 
   auto req2 = createReq(AddTorrentRpcMethod::getMethodName());
@@ -373,7 +375,7 @@ void RpcMethodTest::testAddTorrent_withPosition()
   req2.params->append(List::g());
   req2.params->append(Dict::g());
   req2.params->append(Integer::g(0));
-  m.execute(std::move(req2), e_.get());
+  m.execute("", std::move(req2), e_.get());
 
   CPPUNIT_ASSERT_EQUAL((size_t)1,
                        getReservedGroup(e_->getRequestGroupMan().get(), 0)->
@@ -399,7 +401,7 @@ void RpcMethodTest::testAddMetalink()
   AddMetalinkRpcMethod m;
   {
     // Saving upload metadata is disabled by option.
-    auto res = m.execute(createAddMetalinkReq(), e_.get());
+    auto res = m.execute("", createAddMetalinkReq(), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
     const List* resParams = downcast<List>(res.param);
     CPPUNIT_ASSERT_EQUAL((size_t)2, resParams->size());
@@ -416,7 +418,7 @@ void RpcMethodTest::testAddMetalink()
   }
   e_->getOption()->put(PREF_RPC_SAVE_UPLOAD_METADATA, A2_V_TRUE);
   {
-    auto res = m.execute(createAddMetalinkReq(), e_.get());
+    auto res = m.execute("", createAddMetalinkReq(), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
     const List* resParams = downcast<List>(res.param);
     CPPUNIT_ASSERT_EQUAL((size_t)2, resParams->size());
@@ -452,7 +454,7 @@ void RpcMethodTest::testAddMetalink()
     File(dir+"/c908634fbc257fd56f0114912c2772aeeb4064f4.meta4").remove();
     req.params->append(std::move(opt));
 
-    auto res = m.execute(std::move(req), e_.get());
+    auto res = m.execute("", std::move(req), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
     const List* resParams = downcast<List>(res.param);
     CPPUNIT_ASSERT_EQUAL((size_t)2, resParams->size());
@@ -474,7 +476,7 @@ void RpcMethodTest::testAddMetalink()
 void RpcMethodTest::testAddMetalink_withoutMetalink()
 {
   AddMetalinkRpcMethod m;
-  auto res = m.execute(createReq(AddMetalinkRpcMethod::getMethodName()),
+  auto res = m.execute("", createReq(AddMetalinkRpcMethod::getMethodName()),
                        e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
@@ -484,7 +486,7 @@ void RpcMethodTest::testAddMetalink_notBase64Metalink()
   AddMetalinkRpcMethod m;
   auto req = createReq(AddMetalinkRpcMethod::getMethodName());
   req.params->append("not metalink");
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -495,7 +497,7 @@ void RpcMethodTest::testAddMetalink_withPosition()
   auto urisParam1 = List::g();
   urisParam1->append("http://uri");
   req1.params->append(std::move(urisParam1));
-  auto res1 = m1.execute(std::move(req1), e_.get());
+  auto res1 = m1.execute("", std::move(req1), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res1.code);
 
   AddMetalinkRpcMethod m2;
@@ -503,7 +505,7 @@ void RpcMethodTest::testAddMetalink_withPosition()
   req2.params->append(readFile(A2_TEST_DIR"/2files.metalink"));
   req2.params->append(Dict::g());
   req2.params->append(Integer::g(0));
-  auto res2 = m2.execute(std::move(req2), e_.get());
+  auto res2 = m2.execute("", std::move(req2), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res2.code);
 
   CPPUNIT_ASSERT_EQUAL(e_->getOption()->get(PREF_DIR)+"/aria2-5.0.0.tar.bz2",
@@ -525,7 +527,7 @@ void RpcMethodTest::testGetOption()
   GetOptionRpcMethod m;
   auto req = createReq(GetOptionRpcMethod::getMethodName());
   req.params->append(GroupId::toHex(group->getGID()));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   const Dict* resopt = downcast<Dict>(res.param);
   CPPUNIT_ASSERT_EQUAL(std::string("alpha"),
@@ -533,7 +535,7 @@ void RpcMethodTest::testGetOption()
 
   req = createReq(GetOptionRpcMethod::getMethodName());
   req.params->append(dr->gid->toHex());
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resopt = downcast<Dict>(res.param);
   CPPUNIT_ASSERT_EQUAL(std::string("bravo"),
@@ -541,7 +543,7 @@ void RpcMethodTest::testGetOption()
   // Invalid GID
   req = createReq(GetOptionRpcMethod::getMethodName());
   req.params->append(GroupId::create()->toHex());
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -567,7 +569,7 @@ void RpcMethodTest::testChangeOption()
   }
 #endif // ENABLE_BITTORRENT
   req.params->append(std::move(opt));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
 
   auto option = group->getOption();
 
@@ -603,7 +605,7 @@ void RpcMethodTest::testChangeOption_withBadOption()
   auto opt = Dict::g();
   opt->put(PREF_MAX_DOWNLOAD_LIMIT->k, "badvalue");
   req.params->append(std::move(opt));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -618,7 +620,7 @@ void RpcMethodTest::testChangeOption_withNotAllowedOption()
   auto opt = Dict::g();
   opt->put(PREF_MAX_OVERALL_DOWNLOAD_LIMIT->k, "100K");
   req.params->append(std::move(opt));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   // The unacceptable options are just ignored.
   CPPUNIT_ASSERT_EQUAL(0, res.code);
 }
@@ -627,7 +629,7 @@ void RpcMethodTest::testChangeOption_withoutGid()
 {
   ChangeOptionRpcMethod m;
   auto res = m.execute
-    (createReq(ChangeOptionRpcMethod::getMethodName()), e_.get());
+    ("", createReq(ChangeOptionRpcMethod::getMethodName()), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -641,7 +643,7 @@ void RpcMethodTest::testChangeGlobalOption()
   opt->put(PREF_MAX_OVERALL_UPLOAD_LIMIT->k, "50K");
 #endif // ENABLE_BITTORRENT
   req.params->append(std::move(opt));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
 
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   CPPUNIT_ASSERT_EQUAL
@@ -665,7 +667,7 @@ void RpcMethodTest::testChangeGlobalOption_withBadOption()
   auto opt = Dict::g();
   opt->put(PREF_MAX_OVERALL_DOWNLOAD_LIMIT->k, "badvalue");
   req.params->append(std::move(opt));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -676,7 +678,7 @@ void RpcMethodTest::testChangeGlobalOption_withNotAllowedOption()
   auto opt = Dict::g();
   opt->put(PREF_ENABLE_RPC->k, "100K");
   req.params->append(std::move(opt));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   // The unacceptable options are just ignored.
   CPPUNIT_ASSERT_EQUAL(0, res.code);
 }
@@ -684,7 +686,7 @@ void RpcMethodTest::testChangeGlobalOption_withNotAllowedOption()
 void RpcMethodTest::testNoSuchMethod()
 {
   NoSuchMethodRpcMethod m;
-  auto res = m.execute(createReq("make.hamburger"), nullptr);
+  auto res = m.execute("", createReq("make.hamburger"), nullptr);
   CPPUNIT_ASSERT_EQUAL(1, res.code);
   CPPUNIT_ASSERT_EQUAL(std::string("No such method: make.hamburger"),
                        getString(downcast<Dict>(res.param), "faultString"));
@@ -694,7 +696,7 @@ void RpcMethodTest::testTellStatus_withoutGid()
 {
   TellStatusRpcMethod m;
   auto res = m.execute
-    (createReq(TellStatusRpcMethod::getMethodName()), e_.get());
+    ("", createReq(TellStatusRpcMethod::getMethodName()), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -706,7 +708,7 @@ void addUri(const std::string& uri, const std::shared_ptr<DownloadEngine>& e)
   auto urisParam = List::g();
   urisParam->append(uri);
   req.params->append(std::move(urisParam));
-  CPPUNIT_ASSERT_EQUAL(0, m.execute(std::move(req), e.get()).code);
+  CPPUNIT_ASSERT_EQUAL(0, m.execute("", std::move(req), e.get()).code);
 }
 } // namespace
 
@@ -718,7 +720,7 @@ void addTorrent
   AddTorrentRpcMethod m;
   auto req = createReq(AddTorrentRpcMethod::getMethodName());
   req.params->append(readFile(torrentFile));
-  auto res = m.execute(std::move(req), e.get());
+  auto res = m.execute("", std::move(req), e.get());
 }
 } // namespace
 #endif // ENABLE_BITTORRENT
@@ -738,7 +740,7 @@ void RpcMethodTest::testTellWaiting()
   auto req = createReq(TellWaitingRpcMethod::getMethodName());
   req.params->append(Integer::g(1));
   req.params->append(Integer::g(2));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   const List* resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)2, resParams->size());
@@ -752,7 +754,7 @@ void RpcMethodTest::testTellWaiting()
   req = createReq(TellWaitingRpcMethod::getMethodName());
   req.params->append(Integer::g(1));
   req.params->append(Integer::g(3));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)3, resParams->size());
@@ -760,7 +762,7 @@ void RpcMethodTest::testTellWaiting()
   req = createReq(TellWaitingRpcMethod::getMethodName());
   req.params->append(Integer::g(1));
   req.params->append(Integer::g(4));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)3, resParams->size());
@@ -769,7 +771,7 @@ void RpcMethodTest::testTellWaiting()
   req = createReq(TellWaitingRpcMethod::getMethodName());
   req.params->append(Integer::g(INT32_MAX));
   req.params->append(Integer::g(1));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)0, resParams->size());
@@ -777,7 +779,7 @@ void RpcMethodTest::testTellWaiting()
   req = createReq(TellWaitingRpcMethod::getMethodName());
   req.params->append(Integer::g(1));
   req.params->append(Integer::g(INT32_MAX));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)3, resParams->size());
@@ -785,7 +787,7 @@ void RpcMethodTest::testTellWaiting()
   req = createReq(TellWaitingRpcMethod::getMethodName());
   req.params->append(Integer::g(INT32_MAX));
   req.params->append(Integer::g(INT32_MAX));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)0, resParams->size());
@@ -793,7 +795,7 @@ void RpcMethodTest::testTellWaiting()
   req = createReq(TellWaitingRpcMethod::getMethodName());
   req.params->append(Integer::g(INT32_MIN));
   req.params->append(Integer::g(INT32_MAX));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)0, resParams->size());
@@ -802,7 +804,7 @@ void RpcMethodTest::testTellWaiting()
   req = createReq(TellWaitingRpcMethod::getMethodName());
   req.params->append(Integer::g(-1));
   req.params->append(Integer::g(2));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)2, resParams->size());
@@ -816,7 +818,7 @@ void RpcMethodTest::testTellWaiting()
   req = RpcRequest(TellWaitingRpcMethod::getMethodName(), List::g());
   req.params->append(Integer::g(-1));
   req.params->append(Integer::g(100));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)4, resParams->size());
@@ -824,7 +826,7 @@ void RpcMethodTest::testTellWaiting()
   req = RpcRequest(TellWaitingRpcMethod::getMethodName(), List::g());
   req.params->append(Integer::g(-5));
   req.params->append(Integer::g(100));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)0, resParams->size());
@@ -832,7 +834,7 @@ void RpcMethodTest::testTellWaiting()
   req = RpcRequest(TellWaitingRpcMethod::getMethodName(), List::g());
   req.params->append(Integer::g(-4));
   req.params->append(Integer::g(100));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)1, resParams->size());
@@ -841,7 +843,7 @@ void RpcMethodTest::testTellWaiting()
 void RpcMethodTest::testTellWaiting_fail()
 {
   TellWaitingRpcMethod m;
-  auto res = m.execute(createReq(TellWaitingRpcMethod::getMethodName()),
+  auto res = m.execute("", createReq(TellWaitingRpcMethod::getMethodName()),
                        e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
@@ -849,7 +851,7 @@ void RpcMethodTest::testTellWaiting_fail()
 void RpcMethodTest::testGetVersion()
 {
   GetVersionRpcMethod m;
-  auto res = m.execute(createReq(GetVersionRpcMethod::getMethodName()),
+  auto res = m.execute("", createReq(GetVersionRpcMethod::getMethodName()),
                        e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   const Dict* resParams = downcast<Dict>(res.param);
@@ -1010,7 +1012,7 @@ void RpcMethodTest::testChangePosition()
   req.params->append(GroupId::toHex(gid));
   req.params->append(Integer::g(1));
   req.params->append("POS_SET");
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   CPPUNIT_ASSERT_EQUAL((int64_t)1, downcast<Integer>(res.param)->i());
   CPPUNIT_ASSERT_EQUAL
@@ -1021,14 +1023,14 @@ void RpcMethodTest::testChangePosition_fail()
 {
   ChangePositionRpcMethod m;
   auto res = m.execute
-    (createReq(ChangePositionRpcMethod::getMethodName()), e_.get());
+    ("", createReq(ChangePositionRpcMethod::getMethodName()), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 
   auto req = createReq(ChangePositionRpcMethod::getMethodName());
   req.params->append("1");
   req.params->append(Integer::g(2));
   req.params->append("bad keyword");
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
 
@@ -1071,7 +1073,7 @@ void RpcMethodTest::testChangeUri()
   adduris->append("baduri");
   adduris->append("http://example.org/added3");
   req.params->append(std::move(adduris));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   CPPUNIT_ASSERT_EQUAL((int64_t)2, downcast<Integer>(downcast<List>(res.param)->get(0))->i());
   CPPUNIT_ASSERT_EQUAL((int64_t)3, downcast<Integer>(downcast<List>(res.param)->get(1))->i());
@@ -1092,7 +1094,7 @@ void RpcMethodTest::testChangeUri()
   req.params->append(std::move(adduris));
   // Set position parameter
   req.params->append(Integer::g(2));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   CPPUNIT_ASSERT_EQUAL((int64_t)0, downcast<Integer>(downcast<List>(res.param)->get(0))->i());
   CPPUNIT_ASSERT_EQUAL((int64_t)2, downcast<Integer>(downcast<List>(res.param)->get(1))->i());
@@ -1109,7 +1111,7 @@ void RpcMethodTest::testChangeUri()
   req.params->append(std::move(adduris));
   // Set position far beyond the size of uris in FileEntry.
   req.params->append(Integer::g(1000));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   CPPUNIT_ASSERT_EQUAL((int64_t)0, downcast<Integer>(downcast<List>(res.param)->get(0))->i());
   CPPUNIT_ASSERT_EQUAL((int64_t)2, downcast<Integer>(downcast<List>(res.param)->get(1))->i());
@@ -1146,40 +1148,40 @@ void RpcMethodTest::testChangeUri_fail()
 
   ChangeUriRpcMethod m;
   auto req = createChangeUriEmptyReq(group->getGID(), 1);
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
 
   req = createChangeUriEmptyReq(group->getGID(), 0);
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   // RPC request fails because 2nd argument is less than 1.
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 
   req = createChangeUriEmptyReq(GroupId::create()->getNumericId(), 1);
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   // RPC request fails because the given GID does not exist.
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 
   req = createChangeUriEmptyReq(group->getGID(), 4);
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   // RPC request fails because FileEntry#3 does not exist.
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 
   req = createChangeUriEmptyReq(group->getGID(), 1);
   req.params->set(1, String::g("0"));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   // RPC request fails because index of FileEntry is string.
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 
   req = createChangeUriEmptyReq(group->getGID(), 1);
   req.params->set(2, String::g("http://url"));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   // RPC request fails because 3rd param is not list.
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 
   req = createChangeUriEmptyReq(group->getGID(), 1);
   req.params->set(2, List::g());
   req.params->set(3, String::g("http://url"));
-  res = m.execute(std::move(req), e_.get());
+  res = m.execute("", std::move(req), e_.get());
   // RPC request fails because 4th param is not list.
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
@@ -1188,7 +1190,7 @@ void RpcMethodTest::testGetSessionInfo()
 {
   GetSessionInfoRpcMethod m;
   auto res = m.execute
-    (createReq(GetSessionInfoRpcMethod::getMethodName()), e_.get());
+    ("", createReq(GetSessionInfoRpcMethod::getMethodName()), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   CPPUNIT_ASSERT_EQUAL(util::toHex(e_->getSessionId()),
                        getString(downcast<Dict>(res.param), "sessionId"));
@@ -1210,7 +1212,7 @@ void RpcMethodTest::testPause()
     PauseRpcMethod m;
     auto req = createReq(PauseRpcMethod::getMethodName());
     req.params->append(GroupId::toHex(groups[0]->getGID()));
-    auto res = m.execute(std::move(req), e_.get());
+    auto res = m.execute("", std::move(req), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
   }
   CPPUNIT_ASSERT(groups[0]->isPauseRequested());
@@ -1218,14 +1220,14 @@ void RpcMethodTest::testPause()
     UnpauseRpcMethod m;
     auto req = createReq(UnpauseRpcMethod::getMethodName());
     req.params->append(GroupId::toHex(groups[0]->getGID()));
-    auto res = m.execute(std::move(req), e_.get());
+    auto res = m.execute("", std::move(req), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
   }
   CPPUNIT_ASSERT(!groups[0]->isPauseRequested());
   {
     PauseAllRpcMethod m;
     auto req = createReq(PauseAllRpcMethod::getMethodName());
-    auto res = m.execute(std::move(req), e_.get());
+    auto res = m.execute("", std::move(req), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
   }
   for(size_t i = 0; i < groups.size(); ++i) {
@@ -1234,7 +1236,7 @@ void RpcMethodTest::testPause()
   {
     UnpauseAllRpcMethod m;
     auto req = createReq(UnpauseAllRpcMethod::getMethodName());
-    auto res = m.execute(std::move(req), e_.get());
+    auto res = m.execute("", std::move(req), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
   }
   for(size_t i = 0; i < groups.size(); ++i) {
@@ -1243,7 +1245,7 @@ void RpcMethodTest::testPause()
   {
     ForcePauseAllRpcMethod m;
     auto req = createReq(ForcePauseAllRpcMethod::getMethodName());
-    auto res = m.execute(std::move(req), e_.get());
+    auto res = m.execute("", std::move(req), e_.get());
     CPPUNIT_ASSERT_EQUAL(0, res.code);
   }
   for(size_t i = 0; i < groups.size(); ++i) {
@@ -1294,7 +1296,7 @@ void RpcMethodTest::testSystemMulticall()
     reqparams->append(std::move(dict));
   }
   req.params->append(std::move(reqparams));
-  auto res = m.execute(std::move(req), e_.get());
+  auto res = m.execute("", std::move(req), e_.get());
   CPPUNIT_ASSERT_EQUAL(0, res.code);
   const List* resParams = downcast<List>(res.param);
   CPPUNIT_ASSERT_EQUAL((size_t)7, resParams->size());
@@ -1324,9 +1326,120 @@ void RpcMethodTest::testSystemMulticall()
 void RpcMethodTest::testSystemMulticall_fail()
 {
   SystemMulticallRpcMethod m;
-  auto res = m.execute(createReq("system.multicall"), e_.get());
+  auto res = m.execute("", createReq("system.multicall"), e_.get());
   CPPUNIT_ASSERT_EQUAL(1, res.code);
 }
+
+void RpcMethodTest::testAuthorization()
+{
+  e_->getOption()->put(PREF_RPC_USER, "user");
+  e_->getOption()->put(PREF_RPC_PASSWD, "passwd");
+
+  // Test request token.
+  {
+    PauseAllRpcMethod m;
+    auto req = createReq(PauseAllRpcMethod::getMethodName());
+    auto res = m.execute(e_->getAppToken(), std::move(req), e_.get());
+    CPPUNIT_ASSERT_EQUAL(0, res.code);
+  }
+
+  // Test no token at all.
+  {
+    try {
+      PauseAllRpcMethod m;
+      auto req = createReq(PauseAllRpcMethod::getMethodName());
+      m.execute("", std::move(req), e_.get());
+      CPPUNIT_ASSERT(0);
+    }
+    catch (RecoverableException& ex) {
+      CPPUNIT_ASSERT_EQUAL(ex.getErrNum(), -32602);
+    }
+  }
+
+  // Test wrong request token.
+  {
+    try {
+      PauseAllRpcMethod m;
+      auto req = createReq(PauseAllRpcMethod::getMethodName());
+      m.execute("abc", std::move(req), e_.get());
+      CPPUNIT_ASSERT(0);
+    }
+    catch (RecoverableException& ex) {
+      CPPUNIT_ASSERT_EQUAL(ex.getErrNum(), -32602);
+    }
+  }
+
+  // Test RPC token.
+  {
+      PauseAllRpcMethod m;
+      auto req = createReq(PauseAllRpcMethod::getMethodName());
+      req.params->append("token:" + e_->getAppToken());
+      auto res = m.execute("", std::move(req), e_.get());
+      CPPUNIT_ASSERT_EQUAL(0, res.code);
+  }
+
+  // Test RPC non-token
+  {
+    try {
+      PauseAllRpcMethod m;
+      auto req = createReq(PauseAllRpcMethod::getMethodName());
+      req.params->append("token" + e_->getAppToken());
+      m.execute("", std::move(req), e_.get());
+      CPPUNIT_ASSERT(0);
+    }
+    catch (RecoverableException& ex) {
+      CPPUNIT_ASSERT_EQUAL(ex.getErrNum(), -32602);
+    }
+  }
+
+  // Test wrong RPC token.
+  {
+    try {
+      PauseAllRpcMethod m;
+      auto req = createReq(PauseAllRpcMethod::getMethodName());
+      req.params->append("token:abc");
+      m.execute("", std::move(req), e_.get());
+      CPPUNIT_ASSERT(0);
+    }
+    catch (RecoverableException& ex) {
+      CPPUNIT_ASSERT_EQUAL(ex.getErrNum(), -32602);
+    }
+  }
+
+  // Test multicall.
+  {
+    SystemMulticallRpcMethod m;
+    auto req = createReq("system.multicall");
+    auto dict = Dict::g();
+    auto params = List::g();
+    dict->put("methodName", PauseAllRpcMethod::getMethodName());
+    dict->put("params", List::g());
+    params->append(std::move(dict));
+    req.params->append(std::move(params));
+    auto res = m.execute(e_->getAppToken(), std::move(req), e_.get());
+    CPPUNIT_ASSERT_EQUAL(0, res.code);
+  }
+
+  // Test multicall propagates exception
+  {
+    try {
+      SystemMulticallRpcMethod m;
+      auto req = createReq("system.multicall");
+      auto dict = Dict::g();
+      auto params = List::g();
+      dict->put("methodName", PauseAllRpcMethod::getMethodName());
+      dict->put("params", List::g());
+      params->append(std::move(dict));
+      req.params->append(std::move(params));
+      m.execute("", std::move(req), e_.get());
+      CPPUNIT_ASSERT(0);
+    }
+    catch (RecoverableException& ex) {
+      CPPUNIT_ASSERT_EQUAL(ex.getErrNum(), -32602);
+    }
+  }
+}
+
 
 } // namespace rpc
 

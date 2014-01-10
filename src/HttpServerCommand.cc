@@ -75,8 +75,6 @@ HttpServerCommand::HttpServerCommand
   setStatus(Command::STATUS_ONESHOT_REALTIME);
   e_->addSocketForReadCheck(socket_, this);
   httpServer_->setSecure(secure);
-  httpServer_->setUsernamePassword(e_->getOption()->get(PREF_RPC_USER),
-                                   e_->getOption()->get(PREF_RPC_PASSWD));
   if(e_->getOption()->getAsBool(PREF_RPC_ALLOW_ORIGIN_ALL)) {
     httpServer_->setAllowOrigin("*");
   }
@@ -195,32 +193,35 @@ bool HttpServerCommand::execute()
         e_->addCommand(std::unique_ptr<Command>(this));
         return false;
       }
-      // CORS preflight request uses OPTIONS method. It is not
-      // restricted by authentication.
-      if(!httpServer_->authenticate() &&
-         httpServer_->getMethod() != "OPTIONS") {
-        httpServer_->disableKeepAlive();
-        httpServer_->feedResponse
-          (401, "WWW-Authenticate: Basic realm=\"aria2\"\r\n");
-        e_->addCommand(make_unique<HttpServerResponseCommand>
-                       (getCuid(), httpServer_, e_, socket_));
-        e_->setNoWait(true);
-        return true;
-      }
+
       auto& header = httpServer_->getRequestHeader();
       if(header->fieldContains(HttpHeader::UPGRADE, "websocket") &&
          header->fieldContains(HttpHeader::CONNECTION, "upgrade")) {
 #ifdef ENABLE_WEBSOCKET
         int status = websocketHandshake(header.get());
         if(status == 101) {
-          std::string serverKey =
-            createWebSocketServerKey
-            (header->find(HttpHeader::SEC_WEBSOCKET_KEY));
-          httpServer_->feedUpgradeResponse("websocket",
-                                           fmt("Sec-WebSocket-Accept: %s\r\n",
-                                               serverKey.c_str()));
-          e_->addCommand(make_unique<rpc::WebSocketResponseCommand>
-                         (getCuid(), httpServer_, e_, socket_));
+          std::string protocol;
+          if (httpServer_->selectWebSocketProtocol(e_, protocol)) {
+            std::string headers =
+              "Sec-WebSocket-Accept: " +
+              createWebSocketServerKey(header->find(
+                    HttpHeader::SEC_WEBSOCKET_KEY)) +
+              "\r\n";
+            if (!protocol.empty()) {
+              headers += "Sec-WebSocket-Protocol: " + protocol + "\r\n";
+            }
+
+            std::string serverKey =
+              createWebSocketServerKey(header->find(HttpHeader::SEC_WEBSOCKET_KEY));
+            httpServer_->feedUpgradeResponse("websocket", headers);
+            e_->addCommand(make_unique<rpc::WebSocketResponseCommand>
+                          (getCuid(), httpServer_, e_, socket_));
+          }
+          else {
+            httpServer_->feedResponse(403);
+            e_->addCommand(make_unique<HttpServerResponseCommand>(
+                  getCuid(), httpServer_, e_, socket_));
+          }
         } else {
           if(status == 426) {
             httpServer_->feedResponse(426, "Sec-WebSocket-Version: 13\r\n");

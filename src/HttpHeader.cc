@@ -258,6 +258,7 @@ const char* INTERESTING_HEADER_NAMES[] = {
   "port",
   "retry-after",
   "sec-websocket-key",
+  "sec-websocket-protocol",
   "sec-websocket-version",
   "set-cookie",
   "transfer-encoding",

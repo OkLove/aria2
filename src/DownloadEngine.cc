@@ -50,6 +50,7 @@
 #include "LogFactory.h"
 #include "Logger.h"
 #include "SocketCore.h"
+#include "base64.h"
 #include "util.h"
 #include "a2functional.h"
 #include "DlAbortEx.h"
@@ -65,6 +66,7 @@
 #include "CheckIntegrityEntry.h"
 #include "BtProgressInfoFile.h"
 #include "DownloadContext.h"
+#include "Option.h"
 #include "fmt.h"
 #include "wallclock.h"
 #ifdef ENABLE_BITTORRENT
@@ -102,6 +104,7 @@ DownloadEngine::DownloadEngine(std::unique_ptr<EventPoll> eventPoll)
     asyncDNSServers_(nullptr),
 #endif // HAVE_ARES_ADDR_NODE
     dnsCache_(make_unique<DNSCache>()),
+    appTokenInitialized_(false),
     option_(nullptr)
 {
   unsigned char sessionId[20];
@@ -608,6 +611,23 @@ void DownloadEngine::setCheckIntegrityMan
 (std::unique_ptr<CheckIntegrityMan> ciman)
 {
   checkIntegrityMan_ = std::move(ciman);
+}
+
+const std::string& DownloadEngine::getAppToken()
+{
+  if (!appTokenInitialized_) {
+    if (option_) {
+      auto token =
+        option_->get(PREF_RPC_USER) +
+        ":" +
+        option_->get(PREF_RPC_PASSWD);
+      if (token != ":") {
+        appToken_ = base64::encode(token.begin(), token.end());
+      }
+    }
+    appTokenInitialized_ = true;
+  }
+  return appToken_;
 }
 
 #ifdef HAVE_ARES_ADDR_NODE

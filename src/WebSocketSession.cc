@@ -168,30 +168,38 @@ void onMsgRecvCallback(wslay_event_context_ptr wsctx,
       addResponse(wsSession, res);
       return;
     }
+    auto e = wsSession->getDownloadEngine();
+    auto requestToken = wsSession->getRequestToken();
     Dict* jsondict = downcast<Dict>(json);
-    if(jsondict) {
-      RpcResponse res = processJsonRpcRequest(jsondict,
-                                              wsSession->getDownloadEngine());
-      addResponse(wsSession, res);
-    } else {
-      List* jsonlist = downcast<List>(json);
-      if(jsonlist) {
-        // This is batch call
-        std::vector<RpcResponse> results;
-        for(List::ValueType::const_iterator i = jsonlist->begin(),
-              eoi = jsonlist->end(); i != eoi; ++i) {
-          Dict* jsondict = downcast<Dict>(*i);
-          if(jsondict) {
-            results.push_back(processJsonRpcRequest
-                              (jsondict, wsSession->getDownloadEngine()));
-          }
-        }
-        addResponse(wsSession, results);
-      } else {
-        RpcResponse res(createJsonRpcErrorResponse
-                        (-32600, "Invalid Request.", Null::g()));
+    try {
+      if(jsondict) {
+        RpcResponse res = processJsonRpcRequest(requestToken, jsondict, e);
         addResponse(wsSession, res);
+      } else {
+        List* jsonlist = downcast<List>(json);
+        if(jsonlist) {
+          // This is batch call
+          std::vector<RpcResponse> results;
+          for(List::ValueType::const_iterator i = jsonlist->begin(),
+                eoi = jsonlist->end(); i != eoi; ++i) {
+            Dict* jsondict = downcast<Dict>(*i);
+            if(jsondict) {
+              results.push_back(processJsonRpcRequest(requestToken, jsondict, e));
+            }
+          }
+          addResponse(wsSession, results);
+        } else {
+          RpcResponse res(createJsonRpcErrorResponse
+                          (-32600, "Invalid Request.", Null::g()));
+          addResponse(wsSession, res);
+        }
       }
+    }
+    catch (const RecoverableException& ex) {
+      A2_LOG_DEBUG_EX(EX_EXCEPTION_CAUGHT, ex);
+      RpcResponse res(createJsonRpcErrorResponse(ex.getErrNum(), ex.what(),
+                                                 Null::g()));
+      addResponse(wsSession, res);
     }
   } else {
     RpcResponse res(createJsonRpcErrorResponse
@@ -201,10 +209,12 @@ void onMsgRecvCallback(wslay_event_context_ptr wsctx,
 }
 } // namespace
 
-WebSocketSession::WebSocketSession(const std::shared_ptr<SocketCore>& socket,
+WebSocketSession::WebSocketSession(const std::string& requestToken,
+                                   const std::shared_ptr<SocketCore>& socket,
                                    DownloadEngine* e)
   : socket_(socket),
     e_(e),
+    requestToken_(requestToken),
     ignorePayload_(false),
     receivedLength_(0)
 {

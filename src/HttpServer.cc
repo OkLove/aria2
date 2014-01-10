@@ -38,6 +38,7 @@
 
 #include "HttpHeader.h"
 #include "SocketCore.h"
+#include "DownloadEngine.h"
 #include "HttpHeaderProcessor.h"
 #include "DlAbortEx.h"
 #include "message.h"
@@ -69,7 +70,8 @@ HttpServer::HttpServer(const std::shared_ptr<SocketCore>& socket)
    keepAlive_(true),
    gzip_(false),
    acceptsGZip_(false),
-   secure_(false)
+   secure_(false),
+   hasParsedToken_(false)
 {}
 
 HttpServer::~HttpServer() {}
@@ -267,6 +269,28 @@ void HttpServer::feedUpgradeResponse(const std::string& protocol,
   socketBuffer_.pushStr(std::move(header));
 }
 
+bool HttpServer::selectWebSocketProtocol(DownloadEngine *e,
+                                         std::string& protocol)
+{
+  if (!e) {
+    protocol = "";
+    return true;
+  }
+
+  std::string token = getRequestToken();
+  if (token.empty()) {
+    protocol = "";
+    return true;
+  }
+
+  if (token != e->getAppToken()) {
+    return false;
+  }
+
+  protocol = lastRequestHeader_->find(HttpHeader::SEC_WEBSOCKET_PROTOCOL);
+  return true;
+}
+
 ssize_t HttpServer::sendResponse()
 {
   return socketBuffer_.send();
@@ -277,34 +301,34 @@ bool HttpServer::sendBufferIsEmpty() const
   return socketBuffer_.sendBufferIsEmpty();
 }
 
-bool HttpServer::authenticate()
+const std::string& HttpServer::getRequestToken()
 {
-  if(username_.empty()) {
-    return true;
+  if (hasParsedToken_) {
+    return token_;
+  }
+  hasParsedToken_ = true;
+
+  if (getMethod() == "POST") {
+    const std::string& authHeader =
+      lastRequestHeader_->find(HttpHeader::AUTHORIZATION);
+    if (!authHeader.empty()) {
+      auto p = util::divide(std::begin(authHeader), std::end(authHeader), ' ');
+      if (util::streq(p.first.first, p.first.second, "Basic")) {
+        token_ = std::string(p.second.first, p.second.second);
+      }
+    }
+  }
+  else if (lastRequestHeader_->fieldContains(HttpHeader::UPGRADE, "websocket") &&
+           lastRequestHeader_->fieldContains(HttpHeader::CONNECTION, "upgrade")) {
+    const std::string& protoHeader =
+      lastRequestHeader_->find(HttpHeader::SEC_WEBSOCKET_PROTOCOL);
+    if (!protoHeader.empty()) {
+      token_ = protoHeader;
+      util::replace(token_, "-", "=");
+    }
   }
 
-  const std::string& authHeader =
-    lastRequestHeader_->find(HttpHeader::AUTHORIZATION);
-  if(authHeader.empty()) {
-    return false;
-  }
-  auto p = util::divide(std::begin(authHeader), std::end(authHeader), ' ');
-  if(!util::streq(p.first.first, p.first.second, "Basic")) {
-    return false;
-  }
-  std::string userpass = base64::decode(p.second.first, p.second.second);
-  auto up = util::divide(std::begin(userpass), std::end(userpass), ':');
-  return util::streq(up.first.first, up.first.second,
-                     username_.begin(), username_.end()) &&
-    util::streq(up.second.first, up.second.second,
-                password_.begin(), password_.end());
-}
-
-void HttpServer::setUsernamePassword
-(const std::string& username, const std::string& password)
-{
-  username_ = username;
-  password_ = password;
+  return token_;
 }
 
 int HttpServer::setupResponseRecv()

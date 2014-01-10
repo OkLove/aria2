@@ -568,9 +568,16 @@ public:
 };
 
 class SystemMulticallRpcMethod:public RpcMethod {
+private:
+  std::string requestToken_;
+
 protected:
   virtual std::unique_ptr<ValueBase> process
   (const RpcRequest& req, DownloadEngine* e) CXX11_OVERRIDE;
+
+  virtual void authorize(const std::string& requestToken, RpcRequest& req,
+                         DownloadEngine* e) CXX11_OVERRIDE;
+
 public:
   static const char* getMethodName()
   {

@@ -76,7 +76,8 @@ RpcResponse createJsonRpcErrorResponse(int code,
   return rpc::RpcResponse{code, std::move(params), std::move(id)};
 }
 
-RpcResponse processJsonRpcRequest(Dict* jsondict, DownloadEngine* e)
+RpcResponse processJsonRpcRequest(const std::string& requestToken,
+                                  Dict* jsondict, DownloadEngine* e)
 {
   auto id = jsondict->popValue("id");
   if(!id) {
@@ -99,8 +100,8 @@ RpcResponse processJsonRpcRequest(Dict* jsondict, DownloadEngine* e)
                                       std::move(id));
   }
   A2_LOG_INFO(fmt("Executing RPC method %s", methodName->s().c_str()));
-  return getMethod(methodName->s())->execute
-    ({methodName->s(), std::move(params), std::move(id), true}, e);
+  RpcRequest req = {methodName->s(), std::move(params), std::move(id), true};
+  return getMethod(methodName->s())->execute(requestToken, std::move(req), e);
 }
 
 } // namespace rpc

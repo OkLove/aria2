@@ -3199,14 +3199,115 @@ All code examples come from Python2.7 interpreter.
     >>> tuple(r)
     ('2089b05ecca3d829', 'd2703803b52216d1')
 
+Authentication
+^^^^^^^^^^^^^^
+
+When using :option:`--rpc-user` and/or :option:`--rpc-passwd`, the client has
+to authenticate with aria2 in order to call RPC methods.
+
+The following authentication methods are available:
+
+ - Providing a token via RPC call parameters. *(Recommended)*
+ - Using HTTP POST with HTTP-Auth Basic.
+ - Using a WebSocket sub-protocol.
+
+RPC call tokens
+^^^^^^^^^^^^^^^
+
+An RPC call token is composed similar to HTTP Auth Basic:
+
+.. code-block:: none
+
+  "token:" + base64(user + ":" + password)
+
+E.g. to generate a token in Javascript:
+
+.. code-block:: js
+
+  var user = "user";
+  var pass = "password";
+  var token = "token:" + btoa(user + ":" + pass);
+  // "token:dXNlcjpwYXNzd29yZA=="
+
+To make use of the token, just transmit it as the *first* parameter to any
+``aria2.*`` API call. This includes nested calls via ``system.multicall`` and
+JSON-RPC batch calls.
+
+For example:
+
+.. code-block:: python
+
+  >>> s.aria2.addUri(token, ['http://example.org/file'])
+  >>> s.aria2.unpauseAll(token)
+
+RPC call tokens are supported with all methods of communication.
+
+HTTP POST with Basic Auth
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+HTTP Basic Auth is only available for POST requests. In case you are wondering:
+XML-RPC uses POST, while JSON-RPC may use POST, GET or WebSocket.
+
+Please do not use this method from a browser. If the users gets prompted for
+her credentials and supplies them once, then a browser will usually cache the
+credentials for the rest of the session. This would then allow any site to make
+calls to aria2 without actually knowing the credentials.
+
+To avoid browser prompts, aria2 will never sent the ``HTTP 401`` header, but will
+instead always send ``HTTP 403`` responses.
+
+WebSocket sub-protocol
+^^^^^^^^^^^^^^^^^^^^^^
+
+When using a WebSocket, it is possible to use the token sub-protocol to
+authenticate.
+
+First, you need to construct the token protocol string:
+
+.. code-block:: none
+
+  replace(base64(user + ":" + password), "=", "-")
+
+E.g. to generate a token protocol in Javascript:
+
+.. code-block:: js
+
+  var user = "user";
+  var pass = "password";
+  var protocol = btoa(user + ":" + pass).replace(/=/g, "-");
+  // "token:dXNlcjpwYXNzd29yZA--"
+
+You then have to send the ``Sec-WebSocket-Protocol`` header with the token
+protocol string in your connection request.
+
+In a browser (Javascript) you would construct the WebSocket channel like this:
+
+.. code-block:: js
+
+  var sock = new WebSocket(uri, protocol);
+
+If the protocol was accepted, aria2 will, per the WebSocket spec, with the
+protocol. You may check the response ``Sec-WebSocket-Protocol`` header or
+`sock.protocol` in Javascript.`
+If the token is invalid, aria2 will respond with a ``HTTP 403`` response.
+
+Authentication failures
+^^^^^^^^^^^^^^^^^^^^^^^
+
+If an RPC call fails authentication (missing or incorrect token), aria2 will
+reject the call by returning ``HTTP 403``.
+
+If an RPC call fails to authenticate during a running WebSocket sessiom, aria2
+will return an error with a code of ``-32602`` and a message of ``Unauthorized``.
+
 Error Handling
 ~~~~~~~~~~~~~~
 
-In JSON-RPC, aria2 returns JSON object which contains error code in
-code and the error message in message.
+In JSON-RPC, aria2 returns a JSON object which contains the error code in
+``code`` and the error message in ``message``.
 
-In XML-RPC, aria2 returns faultCode=1 and the error message in
-faultString.
+In XML-RPC, aria2 returns ``faultCode`` and the error message in
+``faultString``.
 
 .. _rpc_options:
 

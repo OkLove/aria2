@@ -75,13 +75,15 @@ private:
   int64_t bodyConsumed_;
   RequestType reqType_;
   std::unique_ptr<DiskWriter> lastBody_;
+  std::string allowOrigin_;
+  std::string token_;
+
   bool keepAlive_;
   bool gzip_;
-  std::string username_;
-  std::string password_;
   bool acceptsGZip_;
-  std::string allowOrigin_;
   bool secure_;
+  bool hasParsedToken_;
+
 public:
   HttpServer(const std::shared_ptr<SocketCore>& socket);
 
@@ -125,10 +127,9 @@ public:
   void feedUpgradeResponse(const std::string& protocol,
                            const std::string& headers);
 
-  bool authenticate();
+  const std::string& getRequestToken();
 
-  void setUsernamePassword
-  (const std::string& username, const std::string& password);
+  bool selectWebSocketProtocol(DownloadEngine *e, std::string& protocol);
 
   ssize_t sendResponse();
 

@@ -228,11 +228,19 @@ bool HttpServerBodyCommand::execute()
           }
           A2_LOG_INFO(fmt("Executing RPC method %s", req.methodName.c_str()));
           auto method = rpc::getMethod(req.methodName);
-          auto res = method->execute(std::move(req), e_);
-          bool gzip = httpServer_->supportsGZip();
-          std::string responseData = rpc::toXml(res, gzip);
-          httpServer_->feedResponse(std::move(responseData), "text/xml");
-          addHttpServerResponseCommand();
+          try {
+            auto res = method->execute(httpServer_->getRequestToken(),
+                                      std::move(req), e_);
+            bool gzip = httpServer_->supportsGZip();
+            std::string responseData = rpc::toXml(res, gzip);
+            httpServer_->feedResponse(std::move(responseData), "text/xml");
+            addHttpServerResponseCommand();
+          }
+          catch (const RecoverableException&) {
+            httpServer_->feedResponse(403);
+            addHttpServerResponseCommand();
+            return true;
+          }
 #else // !ENABLE_XML_RPC
           httpServer_->feedResponse(404);
           addHttpServerResponseCommand();
@@ -272,29 +280,39 @@ bool HttpServerBodyCommand::execute()
             return true;
           }
           Dict* jsondict = downcast<Dict>(json);
-          if(jsondict) {
-            rpc::RpcResponse res = rpc::processJsonRpcRequest(jsondict, e_);
-            sendJsonRpcResponse(res, callback);
-          } else {
-            List* jsonlist = downcast<List>(json);
-            if(jsonlist) {
-              // This is batch call
-              std::vector<rpc::RpcResponse> results;
-              for(List::ValueType::const_iterator i = jsonlist->begin(),
-                    eoi = jsonlist->end(); i != eoi; ++i) {
-                Dict* jsondict = downcast<Dict>(*i);
-                if(jsondict) {
-                  results.push_back(rpc::processJsonRpcRequest(jsondict, e_));
-                }
-              }
-              sendJsonRpcBatchResponse(results, callback);
-            } else {
-              rpc::RpcResponse res
-                (rpc::createJsonRpcErrorResponse
-                 (-32600, "Invalid Request.", Null::g()));
+          const std::string& reqToken = httpServer_->getRequestToken();
+          try {
+            if(jsondict) {
+              auto res = rpc::processJsonRpcRequest(reqToken, jsondict, e_);
               sendJsonRpcResponse(res, callback);
+            } else {
+              List* jsonlist = downcast<List>(json);
+              if(jsonlist) {
+                // This is batch call
+                std::vector<rpc::RpcResponse> results;
+                for(List::ValueType::const_iterator i = jsonlist->begin(),
+                      eoi = jsonlist->end(); i != eoi; ++i) {
+                  Dict* jsondict = downcast<Dict>(*i);
+                  if(jsondict) {
+                    auto res = rpc::processJsonRpcRequest(reqToken, jsondict, e_);
+                    results.push_back(std::move(res));
+                  }
+                }
+                sendJsonRpcBatchResponse(results, callback);
+              } else {
+                rpc::RpcResponse res
+                  (rpc::createJsonRpcErrorResponse
+                  (-32600, "Invalid Request.", Null::g()));
+                sendJsonRpcResponse(res, callback);
+              }
             }
           }
+          catch (const RecoverableException&) {
+            httpServer_->feedResponse(403);
+            addHttpServerResponseCommand();
+            return true;
+          }
+
           return true;
         }
         default:

@@ -151,6 +151,9 @@ private:
   std::unique_ptr<rpc::WebSocketSessionMan> webSocketSessionMan_;
 #endif // ENABLE_WEBSOCKET
 
+  std::string appToken_;
+  bool appTokenInitialized_;
+
   /**
    * Delegates to StatCalc
    */
@@ -235,6 +238,8 @@ public:
   {
     option_ = op;
   }
+
+  const std::string& getAppToken();
 
   void setStatCalc(std::unique_ptr<StatCalc> statCalc);
 

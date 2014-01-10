@@ -54,7 +54,8 @@ class WebSocketInteractionCommand;
 
 class WebSocketSession {
 public:
-  WebSocketSession(const std::shared_ptr<SocketCore>& socket,
+  WebSocketSession(const std::string& requestToken,
+                   const std::shared_ptr<SocketCore>& socket,
                    DownloadEngine* e);
   ~WebSocketSession();
   // Returns true if this session object wants to read data from the
@@ -89,6 +90,11 @@ public:
   std::unique_ptr<ValueBase> parseFinal(const uint8_t* data, size_t len,
                                         ssize_t& error);
 
+  const std::string& getRequestToken() const
+  {
+    return requestToken_;
+  }
+
   const std::shared_ptr<SocketCore>& getSocket() const
   {
     return socket_;
@@ -121,6 +127,7 @@ public:
 private:
   std::shared_ptr<SocketCore> socket_;
   DownloadEngine* e_;
+  std::string requestToken_;
   wslay_event_context_ptr wsctx_;
   bool ignorePayload_;
   int32_t receivedLength_;

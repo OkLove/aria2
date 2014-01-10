@@ -1345,6 +1345,12 @@ std::unique_ptr<ValueBase> GetGlobalStatRpcMethod::process
   return std::move(res);
 }
 
+void SystemMulticallRpcMethod::authorize(const std::string& requestToken,
+                                         RpcRequest& req, DownloadEngine* e)
+{
+  requestToken_ = requestToken;
+}
+
 std::unique_ptr<ValueBase> SystemMulticallRpcMethod::process
 (const RpcRequest& req, DownloadEngine* e)
 {
@@ -1377,13 +1383,16 @@ std::unique_ptr<ValueBase> SystemMulticallRpcMethod::process
     } else {
       paramsList = List::g();
     }
-    RpcResponse res = getMethod(methodName->s())->execute
-      ({methodName->s(), std::move(paramsList), nullptr, req.jsonRpc}, e);
-    if(res.code == 0) {
+    RpcRequest subreq =
+      {methodName->s(), std::move(paramsList), nullptr, req.jsonRpc};
+    RpcResponse res =
+      getMethod(methodName->s())->execute(requestToken_, std::move(subreq), e);
+    if (res.code == 0) {
       auto l = List::g();
       l->append(std::move(res.param));
       list->append(std::move(l));
-    } else {
+    }
+    else {
       list->append(std::move(res.param));
     }
   }

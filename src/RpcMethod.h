@@ -72,6 +72,10 @@ protected:
   virtual std::unique_ptr<ValueBase> process
   (const RpcRequest& req, DownloadEngine* e) = 0;
 
+  // Subclass may override this function to provide own auth mechanism.
+  virtual void authorize(const std::string& requestToken, RpcRequest& req,
+                         DownloadEngine* e);
+
   void gatherRequestOption(Option* option, const Dict* optionsDict);
 
   void gatherChangeableOption(Option* option, const Dict* optionDict);
@@ -95,7 +99,8 @@ public:
 
   // Do work to fulfill RpcRequest req and returns its result as
   // RpcResponse. This method delegates to process() method.
-  RpcResponse execute(RpcRequest req, DownloadEngine* e);
+  RpcResponse execute(const std::string& requestToken,
+                      RpcRequest req, DownloadEngine* e);
 };
 
 } // namespace rpc

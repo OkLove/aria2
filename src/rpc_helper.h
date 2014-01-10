@@ -63,7 +63,8 @@ RpcResponse createJsonRpcErrorResponse(int code,
                                        std::unique_ptr<ValueBase> id);
 
 // Processes JSON-RPC request |jsondict| and returns the result.
-RpcResponse processJsonRpcRequest(Dict* jsondict, DownloadEngine* e);
+RpcResponse processJsonRpcRequest(const std::string& requestToken,
+                                  Dict* jsondict, DownloadEngine* e);
 
 } // namespace rpc
 

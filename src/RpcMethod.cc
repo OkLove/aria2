@@ -46,6 +46,7 @@
 #include "RpcResponse.h"
 #include "prefs.h"
 #include "fmt.h"
+#include "util.h"
 #include "DlAbortEx.h"
 #include "a2functional.h"
 
@@ -63,19 +64,53 @@ std::unique_ptr<ValueBase> RpcMethod::createErrorResponse
 (const Exception& e, const RpcRequest& req)
 {
   auto params = Dict::g();
-  params->put((req.jsonRpc ? "code" : "faultCode"), Integer::g(1));
+  auto code = e.getErrNum();
+  if (!code) {
+    code = 1;
+  }
+  params->put((req.jsonRpc ? "code" : "faultCode"), Integer::g(code));
   params->put((req.jsonRpc ? "message" : "faultString"), std::string(e.what()));
   return std::move(params);
 }
 
-RpcResponse RpcMethod::execute(RpcRequest req, DownloadEngine* e)
+RpcResponse RpcMethod::execute(const std::string& requestToken,
+                               RpcRequest req, DownloadEngine* e)
 {
   try {
+    authorize(requestToken, req, e);
     auto r = process(req, e);
     return RpcResponse(0, std::move(r), std::move(req.id));
-  } catch(RecoverableException& ex) {
+  }
+  catch(RecoverableException& ex) {
     A2_LOG_DEBUG_EX(EX_EXCEPTION_CAUGHT, ex);
+    if (ex.getErrorCode() == error_code::UNAUTHORIZED) {
+      throw;
+    }
     return RpcResponse(1, createErrorResponse(ex, req), std::move(req.id));
+  }
+}
+
+void RpcMethod::authorize(const std::string& requestToken, RpcRequest& req,
+                          DownloadEngine* e)
+{
+  const std::string applicationToken = e ? e->getAppToken() : "";
+  if (req.params && req.params->size() > 0) {
+    const String *t = downcast<String>(req.params->get(0));
+    if (t) {
+      const std::string& raw = t->s();
+      if (util::startsWith(raw, "token:")) {
+        if (!util::streq(raw.begin() + 6, raw.end(),
+                         applicationToken.begin(), applicationToken.end())) {
+          throw DL_ABORT_EX3(-32602, "Unauthorized", error_code::UNAUTHORIZED);
+        }
+        req.params->pop_front();
+        return;
+      }
+    }
+  }
+  if (!util::streq(requestToken.begin(), requestToken.end(),
+                    applicationToken.begin(), applicationToken.end())) {
+    throw DL_ABORT_EX3(-32602, "Unauthorized", error_code::UNAUTHORIZED);
   }
 }
 
